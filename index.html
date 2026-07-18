@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ふー ふー ふー ふー はー</title>
+<style>
+  :root{
+    --bg:#0b1622;--bg2:#0f2130;--ink:#eef4f7;--ink-dim:#9fb2bd;--accent:#7fd6c8;
+    --font-jp:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:var(--font-jp);
+    background:radial-gradient(120% 90% at 50% 8%, #16374a 0%, var(--bg2) 42%, var(--bg) 100%);
+    color:var(--ink);min-height:100vh;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:8vh 24px;-webkit-font-smoothing:antialiased;
+  }
+  h1{
+    font-weight:300;
+    font-size:clamp(1.4rem,5vw,2.2rem);
+    letter-spacing:.5em;text-indent:.5em;
+    text-align:center;line-height:2;
+  }
+  .sub{margin-top:1.2em;font-size:.65rem;letter-spacing:.45em;text-indent:.45em;color:var(--ink-dim);text-transform:uppercase}
+  ul{list-style:none;margin-top:9vh;width:100%;max-width:520px}
+  li+li{margin-top:14px}
+  a{
+    display:flex;align-items:baseline;gap:1.2em;
+    padding:20px 26px;border:1px solid rgba(159,178,189,.22);border-radius:14px;
+    color:var(--ink);text-decoration:none;
+    background:rgba(15,33,48,.4);
+    transition:border-color .3s ease, background .3s ease;
+  }
+  a:hover{border-color:var(--accent);background:rgba(127,214,200,.07)}
+  .num{color:var(--ink-dim);font-weight:300;letter-spacing:.15em;font-size:.85rem}
+  .name{letter-spacing:.22em;text-indent:.22em}
+  .meta{margin-left:auto;color:var(--ink-dim);font-size:.68rem;letter-spacing:.2em}
+  footer{margin-top:auto;padding-top:9vh;color:var(--ink-dim);font-size:.62rem;letter-spacing:.35em;text-indent:.35em;text-align:center}
+</style>
+</head>
+<body>
+  <h1>ふー ふー ふー ふー はー</h1>
+  <div class="sub">breathing &nbsp;·&nbsp; ambient</div>
+  <ul>
+    <li>
+      <a href="01-coherent/">
+        <span class="num">01</span>
+        <span class="name">コヒーレント呼吸</span>
+        <span class="meta">海辺 / 6回・分</span>
+      </a>
+    </li>
+    <!-- 次回作はここに <li> を足していく -->
+  </ul>
+  <footer>いきを、ととのえる</footer>
+</body>
+</html>
