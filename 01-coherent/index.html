@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>コヒーレント呼吸 — 海辺 / 汽笛</title>
+<title>コヒーレント呼吸 — 濃紺 / 墨 / 鉄色</title>
 <style>
   :root{
     --bg:#0b1622;--bg2:#0f2130;--ink:#eef4f7;--ink-dim:#9fb2bd;
@@ -12,7 +12,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
-  body{font-family:var(--font-jp);background:radial-gradient(120% 90% at 50% 12%, #16374a 0%, var(--bg2) 42%, var(--bg) 100%);color:var(--ink);min-height:100%;overflow:hidden;display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased}
+  body{font-family:var(--font-jp);background:linear-gradient(180deg, #1b2c4c 0%, #131f38 45%, #080d1a 100%);color:var(--ink);min-height:100%;overflow:hidden;display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased}
   canvas{position:fixed;inset:0;width:100%;height:100%;z-index:0}
   .frame{position:relative;z-index:1;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
   .masthead{position:fixed;top:clamp(20px,5vh,44px);left:0;right:0;text-align:center}
@@ -33,10 +33,20 @@
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:12px;height:12px;border-radius:50%;background:var(--inhale);cursor:pointer}
   input[type=range]::-moz-range-thumb{width:12px;height:12px;border:none;border-radius:50%;background:var(--inhale);cursor:pointer}
   .hint{position:fixed;top:50%;left:0;right:0;text-align:center;color:var(--ink-dim);font-size:.74rem;letter-spacing:.3em;text-indent:.3em;z-index:2;transition:opacity .8s ease}
+  #scenes{position:fixed;top:clamp(16px,4vh,26px);right:clamp(16px,4vw,26px);z-index:4;display:flex;gap:18px;align-items:flex-start;opacity:0;pointer-events:none;transition:opacity .7s ease}
+  #scenes.show{opacity:1;pointer-events:auto}
+  .scene{display:flex;flex-direction:column;align-items:center;gap:9px;cursor:pointer;background:none;border:none;padding:0;font-family:var(--font-jp)}
+  .scene:focus-visible{outline:2px solid var(--inhale);outline-offset:4px;border-radius:6px}
+  .swatch{width:22px;height:22px;border-radius:50%;border:1.5px solid rgba(255,255,255,.25);background-clip:padding-box;transition:transform .2s ease,border-color .2s ease}
+  .scene:hover .swatch{transform:scale(1.14)}
+  .scene.active .swatch{border-color:#fff}
+  .scene-label{font-size:.62rem;letter-spacing:.26em;text-indent:.26em;color:var(--ink-dim);transition:color .3s ease;white-space:nowrap}
+  .scene.active .scene-label{color:var(--ink)}
 </style>
 </head>
 <body>
   <canvas id="c"></canvas>
+  <div id="scenes" aria-label="情景を選ぶ"></div>
   <div class="masthead">
     <div class="method"><span class="num">01</span>コヒーレント呼吸</div>
     <div class="romaji">coherent breathing &nbsp;·&nbsp; by the sea</div>
@@ -58,6 +68,55 @@
   const reduceMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const INHALE=5.5, EXHALE=5.5, CYCLE=INHALE+EXHALE;
 
+  // ===== 情景（背景）システム：骨格には触れず、まとう空気だけを着替える =====
+  // 実物の質感を狙わず、彩度を抑えた深い色の「気分」を静かな無地グラデーションで置く。
+  // BrPM・呼吸・音・円の動きは全情景で不変。変わるのは背景色と呼吸アクセント色のみ。
+  const SCENES=[
+    { id:'kon',   name:'濃紺', inhale:'127,196,214', exhale:'226,196,150', glow:'190,214,236',
+      swatch:'#16233f', top:'#1b2c4c', mid:'#131f38', bot:'#080d1a' },
+    { id:'sumi',  name:'墨',   inhale:'168,196,204', exhale:'214,196,168', glow:'200,210,214',
+      swatch:'#1a1c1f', top:'#24272b', mid:'#16181b', bot:'#080809' },
+    { id:'tetsu', name:'鉄色', inhale:'150,190,190', exhale:'214,190,150', glow:'196,206,204',
+      swatch:'#20282a', top:'#28322f', mid:'#1a2120', bot:'#0a0f0e' },
+  ];
+  let sceneIdx=0;
+  const bgCanvas=document.createElement('canvas'), bgCtx=bgCanvas.getContext('2d');
+  const scenesEl=document.getElementById('scenes');
+
+  function renderBackground(){
+    if(W<=0||H<=0) return;
+    bgCanvas.width=Math.floor(W*DPR); bgCanvas.height=Math.floor(H*DPR);
+    bgCtx.setTransform(DPR,0,0,DPR,0,0); bgCtx.clearRect(0,0,W,H);
+    const s=SCENES[sceneIdx], g=bgCtx;
+    // 上からうっすら明るく、下へ静かに沈む無地のグラデーション（小細工なし）
+    const rg=g.createRadialGradient(W*0.5,H*0.14,0,W*0.5,H*0.14,Math.hypot(W,H));
+    rg.addColorStop(0,s.top);rg.addColorStop(0.42,s.mid);rg.addColorStop(1,s.bot);
+    g.fillStyle=rg;g.fillRect(0,0,W,H);
+  }
+
+  function updateSwatches(){ [...scenesEl.children].forEach((el,i)=>el.classList.toggle('active',i===sceneIdx)); }
+  function setScene(i){
+    sceneIdx=i; const s=SCENES[i];
+    const root=document.documentElement.style;
+    root.setProperty('--inhale',`rgb(${s.inhale})`); root.setProperty('--exhale',`rgb(${s.exhale})`);
+    document.body.style.background=`linear-gradient(180deg, ${s.top} 0%, ${s.mid} 45%, ${s.bot} 100%)`;
+    renderBackground(); updateSwatches();
+  }
+  const nameEl=null;
+  SCENES.forEach((s,i)=>{
+    const wrap=document.createElement('button'); wrap.className='scene'; wrap.type='button';
+    wrap.setAttribute('aria-label','情景: '+s.name);
+    const sw=document.createElement('span'); sw.className='swatch'; sw.style.background=s.swatch;
+    const lab=document.createElement('span'); lab.className='scene-label'; lab.textContent=s.name;
+    wrap.appendChild(sw); wrap.appendChild(lab);
+    wrap.addEventListener('click',()=>{ setScene(i); showScenes(); });
+    scenesEl.appendChild(wrap);
+  });
+  let scenesHideTimer=null;
+  function showScenes(){ scenesEl.classList.add('show'); clearTimeout(scenesHideTimer); scenesHideTimer=setTimeout(()=>scenesEl.classList.remove('show'),3500); }
+  ['pointermove','pointerdown','touchstart','keydown'].forEach(ev=>window.addEventListener(ev,showScenes,{passive:true}));
+
+  // ============ AUDIO（骨格：全情景で不変）============
   let audio=null,master=null,reverb=null,reverbGain=null,drone=null,droneGain=null;
   let playing=false,schedulerId=null,animId=null,startT=0,lastPhase=null,foghornTimer=null;
   let hornGlow=0, hornX=0.5;
@@ -67,12 +126,9 @@
     [164.81,246.94,329.63,415.30,493.88],
     [130.81,196.00,261.63,329.63,392.00],
   ];
-
   function makeReverb(ac,dur,decay){const len=ac.sampleRate*dur,buf=ac.createBuffer(2,len,ac.sampleRate);for(let ch=0;ch<2;ch++){const d=buf.getChannelData(ch);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay);}const c=ac.createConvolver();c.buffer=buf;return c;}
-  // ブラウンノイズ（海のざわめき用）
   let noiseBuf=null;
   function getNoise(ac){if(noiseBuf)return noiseBuf;const len=ac.sampleRate*3;noiseBuf=ac.createBuffer(1,len,ac.sampleRate);const d=noiseBuf.getChannelData(0);let last=0;for(let i=0;i<len;i++){const w=Math.random()*2-1;last=(last+0.02*w)/1.02;d[i]=last*3.5;}return noiseBuf;}
-
   function breathCurve(steps){const a=new Float32Array(steps);for(let i=0;i<steps;i++){const p=i/(steps-1);const bf=p<0.5?p/0.5:1-(p-0.5)/0.5;a[i]=(1-Math.cos(Math.PI*bf))/2;}return a;}
   const BREATH_STEPS=64, BREATH_ENV=breathCurve(BREATH_STEPS);
 
@@ -84,8 +140,6 @@
     droneGain=audio.createGain(); droneGain.gain.value=0.0001;
     const dl=audio.createBiquadFilter(); dl.type='lowpass'; dl.frequency.value=400;
     drone.connect(droneGain); droneGain.connect(dl); dl.connect(master); drone.start();
-
-    // ── 遠い海のざわめき（微か）──
     const sea=audio.createBufferSource(); sea.buffer=getNoise(audio); sea.loop=true;
     const seaLP=audio.createBiquadFilter(); seaLP.type='lowpass'; seaLP.frequency.value=440; seaLP.Q.value=0.4;
     const seaGain=audio.createGain(); seaGain.gain.value=0.018;
@@ -94,39 +148,27 @@
     surf.connect(surfG); surfG.connect(seaGain.gain); surf.start(); sea.start();
   }
 
-  // ── 汽笛：複数の船。船ごとに固有の音程と水平線上の位置。──
-  // 鳴るたびに1隻が選ばれ、そのときの距離もランダム（遠め優勢）。
-  // 音程は曲の調（D）に乗せた完全五度の積み：ドローンやパッドと共鳴して溶ける。
+  // ── 汽笛：複数の船（純正倍音で共鳴。曲の調に乗せた完全五度の積み）──
   const SHIPS=[
-    {f0:73.42,  x:0.18},   // 大型船・D2（ドローンと同音）・左の沖
-    {f0:110.00, x:0.55},   // 中型船・A2（五度上）・中央
-    {f0:164.81, x:0.82},   // 小型船・E3（さらに五度上）・右
+    {f0:73.42,  x:0.18},
+    {f0:110.00, x:0.55},
+    {f0:164.81, x:0.82},
   ];
   function foghorn(t){
     const ship=SHIPS[Math.floor(Math.random()*SHIPS.length)];
-    // 距離 0..1（0=いちばん近い / 1=水平線の彼方）。遠めに偏らせる
-    const dist=Math.pow(Math.random(),0.45);
-    const near=1-dist;
-
+    const dist=Math.pow(Math.random(),0.45); const near=1-dist;
     hornGlow=0.25+near*0.75; hornX=ship.x+(Math.random()-0.5)*0.06;
-
-    const dur=4.6+Math.random()*2.4;
-    const f0=ship.f0;
+    const dur=4.6+Math.random()*2.4; const f0=ship.f0;
     const bus=audio.createGain(); bus.gain.value=1;
-    // 距離＝高い倍音の減衰（近い:1400Hzまで / 遠い:520Hzまで）
-    const lp=audio.createBiquadFilter(); lp.type='lowpass';
-    lp.frequency.value=520+near*880; lp.Q.value=0.6;
-    // 音量：気配レベル（最遠 ~0.004、最近でも ~0.019）
+    const lp=audio.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=520+near*880; lp.Q.value=0.6;
     const peak=0.004+near*0.015;
     const level=audio.createGain();
     level.gain.setValueAtTime(0.0001,t);
-    level.gain.exponentialRampToValueAtTime(peak,t+1.9+dist*1.2);  // 遠いほどゆっくり立ち上がる
+    level.gain.exponentialRampToValueAtTime(peak,t+1.9+dist*1.2);
     level.gain.setValueAtTime(peak,t+dur-2.4);
     level.gain.exponentialRampToValueAtTime(0.0001,t+dur);
     bus.connect(lp); lp.connect(level); level.connect(master);
-    // 残響：遠いほど残響が直接音に勝つ（近い1.1倍 / 遠い2.6倍）
     const rv=audio.createGain(); rv.gain.value=1.1+dist*1.5; lp.connect(rv); rv.connect(reverb);
-    // 純正な整数倍音（うなりなし）＋ごく淡い五度上の声 → 濁らず、響きが増える
     const partials=[[1,1],[2,0.5],[3,0.3],[4,0.18],[5,0.1],[6,0.06]];
     const voices=[{r:1,a:1},{r:1.5,a:0.18}];
     voices.forEach(v=>partials.forEach(([mult,amp])=>{
@@ -135,7 +177,7 @@
     }));
   }
   function scheduleFoghorn(){
-    const wait=40+Math.random()*50;   // 40秒〜1分半に1回
+    const wait=40+Math.random()*50;
     foghornTimer=setTimeout(()=>{ if(playing){ foghorn(audio.currentTime+0.1); scheduleFoghorn(); } }, wait*1000);
   }
 
@@ -163,7 +205,7 @@
   function setWord(chars,cls){wordEl.className='word '+cls;wordEl.innerHTML='';const spans=chars.split('').map(c=>{const s=document.createElement('span');s.textContent=c;wordEl.appendChild(s);return s;});spans.forEach((s,i)=>setTimeout(()=>s.classList.add('on'),120+i*520));}
 
   let W=0,H=0,DPR=1;
-  function resize(){DPR=Math.min(window.devicePixelRatio||1,2);const r=canvas.getBoundingClientRect();W=r.width;H=r.height;canvas.width=W*DPR;canvas.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+  function resize(){DPR=Math.min(window.devicePixelRatio||1,2);const r=canvas.getBoundingClientRect();W=r.width;H=r.height;canvas.width=W*DPR;canvas.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);renderBackground();}
   window.addEventListener('resize',resize);
 
   const bubbleVis=[]; let pendingBubbles=[]; let ambientBubbleT=0;
@@ -175,8 +217,9 @@
   function draw(){
     const now=audio?audio.currentTime:performance.now()/1000;
     const {b,inhale}=currentBreath(now);
+    const S=SCENES[sceneIdx];
     const phase=inhale?'in':'out';
-    if(playing && phase!==lastPhase){lastPhase=phase;if(inhale){setWord('すう','inhale');subEl.textContent='鼻から、ゆっくり';}else{setWord('はく','exhale');subEl.textContent='口から、細く長く';}}
+    if(phase!==lastPhase){lastPhase=phase;if(inhale){setWord('すう','inhale');subEl.textContent='鼻から、ゆっくり';}else{setWord('はく','exhale');subEl.textContent='口から、細く長く';}}
 
     while(pendingBubbles.length && now>=pendingBubbles[0]){pendingBubbles.shift();spawnBubble();}
     ambientBubbleT-=0.016; if(ambientBubbleT<=0 && !reduceMotion){if(Math.random()<0.4)spawnBubble();ambientBubbleT=0.6+Math.random();}
@@ -184,21 +227,18 @@
 
     ctx.clearRect(0,0,W,H);
     const cx=W/2, cy=H/2, unit=Math.min(W,H);
-    const sh=ctx.createLinearGradient(0,0,0,H);
-    sh.addColorStop(0,'rgba(110,200,210,0.05)');sh.addColorStop(0.55,'rgba(40,90,120,0.02)');sh.addColorStop(1,'rgba(8,16,26,0)');
-    ctx.fillStyle=sh; ctx.fillRect(0,0,W,H);
+    if(bgCanvas.width) ctx.drawImage(bgCanvas,0,0,W,H);
 
-    // 汽笛のとき、水平線の彼方にぼんやりした灯り（距離が近いほどわずかに濃い）
     if(hornGlow>0.008){
       const lx=W*hornX, ly=H*0.86;
       const gp=ctx.createRadialGradient(lx,ly,0,lx,ly,unit*0.13);
-      gp.addColorStop(0,`rgba(210,230,240,${0.11*hornGlow})`);gp.addColorStop(1,'rgba(210,230,240,0)');
+      gp.addColorStop(0,`rgba(${S.glow},${0.11*hornGlow})`);gp.addColorStop(1,`rgba(${S.glow},0)`);
       ctx.fillStyle=gp; ctx.beginPath(); ctx.arc(lx,ly,unit*0.13,0,Math.PI*2); ctx.fill();
     }
 
     for(let i=bubbleVis.length-1;i>=0;i--){const bb=bubbleVis[i];bb.y-=bb.v*0.016;bb.x+=Math.sin(bb.y*0.02+bb.wob)*0.4;if(bb.y<-12){bubbleVis.splice(i,1);continue;}ctx.strokeStyle='rgba(180,225,235,0.22)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(bb.x,bb.y,bb.r,0,Math.PI*2);ctx.stroke();ctx.fillStyle='rgba(210,240,248,0.06)';ctx.beginPath();ctx.arc(bb.x-bb.r*0.3,bb.y-bb.r*0.3,bb.r*0.4,0,Math.PI*2);ctx.fill();}
 
-    const accent=inhale?'127,214,200':'242,199,154';
+    const accent=inhale?S.inhale:S.exhale;
     const baseR=unit*0.16, R=baseR*(0.62+0.42*b);
     const guideR=unit*0.30;
     ctx.strokeStyle='rgba(159,178,189,0.14)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx,cy,guideR,0,Math.PI*2);ctx.stroke();
@@ -230,7 +270,7 @@
   toggleBtn.addEventListener('click',()=>{if(playing)stop();else{if(master)master.gain.value=volEl.value/100*0.85;start();}});
   volEl.addEventListener('input',()=>{if(master)master.gain.value=volEl.value/100*0.85;});
 
-  resize(); draw();
+  resize(); setScene(0); draw();
 })();
 </script>
 </body>
