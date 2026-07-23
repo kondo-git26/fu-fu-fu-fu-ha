@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>コヒーレント呼吸 III — みっつの時間</title>
+<style>
+  :root{
+    --bg:#0b1622;--bg2:#0f2130;--ink:#eef4f7;--ink-dim:#9fb2bd;
+    --inhale:#7fd6c8;--exhale:#f2c79a;
+    --font-jp:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:var(--font-jp);background:linear-gradient(180deg, #1b2c4c 0%, #131f38 45%, #080d1a 100%);color:var(--ink);min-height:100%;overflow:hidden;display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased}
+  canvas{position:fixed;inset:0;width:100%;height:100%;z-index:0}
+  .frame{position:relative;z-index:1;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+  .masthead{position:fixed;top:clamp(20px,5vh,44px);left:0;right:0;text-align:center}
+  .method{font-size:clamp(.82rem,2.4vw,1rem);font-weight:400;letter-spacing:.42em;text-indent:.42em;color:var(--ink)}
+  .method .num{color:var(--ink-dim);font-weight:300;margin-right:.9em;letter-spacing:.2em}
+  .romaji{margin-top:.7em;font-size:.62rem;letter-spacing:.5em;text-indent:.5em;color:var(--ink-dim);text-transform:uppercase}
+  .word{display:flex;gap:.06em;font-weight:300;font-size:clamp(3.4rem,15vw,7rem);letter-spacing:.14em;line-height:1;color:var(--ink);transition:color 1.4s ease}
+  .word.inhale{color:var(--inhale)}.word.exhale{color:var(--exhale)}
+  .word span{display:inline-block;opacity:0;transform:translateY(.18em);transition:opacity 1.1s cubic-bezier(.25,.6,.3,1),transform 1.1s cubic-bezier(.25,.6,.3,1);text-indent:.14em}
+  .word span.on{opacity:1;transform:translateY(0)}
+  .subtext{position:fixed;bottom:clamp(74px,15vh,120px);left:0;right:0;text-align:center;font-size:.72rem;letter-spacing:.4em;text-indent:.4em;color:var(--ink-dim);min-height:1em;transition:opacity 1.2s ease}
+  .controls{position:fixed;bottom:clamp(16px,4vh,30px);left:0;right:0;z-index:2;display:flex;gap:16px;align-items:center;justify-content:center;flex-wrap:nowrap;padding:0 16px;pointer-events:none}
+  .controls>*{pointer-events:auto}
+  button{font-family:var(--font-jp);cursor:pointer;border:1px solid rgba(159,178,189,.35);background:rgba(15,33,48,.5);backdrop-filter:blur(6px);color:var(--ink);padding:12px 30px;border-radius:999px;font-size:.9rem;letter-spacing:.22em;text-indent:.22em;transition:all .3s ease;white-space:nowrap;flex-shrink:0}
+  button:hover{border-color:var(--inhale);color:#fff}
+  button:focus-visible{outline:2px solid var(--inhale);outline-offset:3px}
+  .vol{display:flex;align-items:center;gap:9px;color:var(--ink-dim);font-size:.68rem;letter-spacing:.12em;white-space:nowrap;flex-shrink:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:80px;height:2px;border-radius:2px;background:rgba(159,178,189,.3);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:12px;height:12px;border-radius:50%;background:var(--inhale);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:12px;height:12px;border:none;border-radius:50%;background:var(--inhale);cursor:pointer}
+  .hint{position:fixed;top:50%;left:0;right:0;text-align:center;color:var(--ink-dim);font-size:.74rem;letter-spacing:.3em;text-indent:.3em;z-index:2;transition:opacity .8s ease}
+  #scenes{position:fixed;top:clamp(16px,4vh,26px);right:clamp(16px,4vw,26px);z-index:4;display:flex;gap:18px;align-items:flex-start;opacity:0;pointer-events:none;transition:opacity .7s ease}
+  #scenes.show{opacity:1;pointer-events:auto}
+  .scene{display:flex;flex-direction:column;align-items:center;gap:9px;cursor:pointer;background:none;border:none;padding:0;font-family:var(--font-jp)}
+  .scene:focus-visible{outline:2px solid var(--inhale);outline-offset:4px;border-radius:6px}
+  .swatch{width:22px;height:22px;border-radius:50%;border:1.5px solid rgba(255,255,255,.25);background-clip:padding-box;transition:transform .2s ease,border-color .2s ease}
+  .scene:hover .swatch{transform:scale(1.14)}
+  .scene.active .swatch{border-color:#fff}
+  .scene-label{font-size:.62rem;letter-spacing:.26em;text-indent:.26em;color:var(--ink-dim);transition:color .3s ease;white-space:nowrap}
+  .scene.active .scene-label{color:var(--ink)}
+
+  /* --- 縦長・狭い画面：重なりを避ける --- */
+  @media (max-width: 620px), (orientation: portrait){
+    .masthead{top:clamp(14px,3vh,26px)}
+    .method{font-size:clamp(.72rem,3.2vw,.9rem);letter-spacing:.3em;text-indent:.3em}
+    .romaji{margin-top:.6em;font-size:.55rem;letter-spacing:.34em;text-indent:.34em}
+    /* スウォッチはタイトルと取り合わず、下部（操作系の上）へ。幅は画面いっぱいを使って中央寄せ */
+    #scenes{top:auto;right:auto;left:0;transform:none;width:100%;justify-content:center;
+            bottom:calc(clamp(16px,4vh,30px) + 74px);gap:clamp(20px,7vw,34px);padding:0 16px}
+    .subtext{bottom:calc(clamp(16px,4vh,30px) + 146px);font-size:.64rem;letter-spacing:.28em;text-indent:.28em;padding:0 20px}
+    .word{font-size:clamp(3rem,17vw,5rem)}
+    .hint{font-size:.68rem;letter-spacing:.24em;text-indent:.24em;padding:0 18px}
+    button{padding:11px 24px;font-size:.85rem;letter-spacing:.18em;text-indent:.18em}
+    .controls{gap:12px}
+    input[type=range]{width:70px}
+  }
+  /* さらに背の低い画面 */
+  @media (max-height: 700px){
+    #scenes{bottom:calc(clamp(12px,3vh,24px) + 66px)}
+    .subtext{bottom:calc(clamp(12px,3vh,24px) + 130px)}
+    .word{font-size:clamp(2.6rem,14vw,4rem)}
+  }
+  /* ごく狭い端末 */
+  @media (max-width: 380px){
+    .scene-label{font-size:.56rem;letter-spacing:.16em;text-indent:.16em}
+    button{padding:10px 20px;font-size:.8rem}
+    input[type=range]{width:58px}
+  }
+</style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="scenes" aria-label="情景を選ぶ"></div>
+  <div class="masthead">
+    <div class="method"><span class="num">03</span>コヒーレント呼吸 III</div>
+    <div class="romaji">three times &nbsp;·&nbsp; breath, breath, bubbles</div>
+  </div>
+  <div class="frame"><div class="word" id="word" aria-live="polite"></div></div>
+  <div class="subtext" id="subtext">円に合わせて</div>
+  <div class="hint" id="hint">みっつの時間が、それぞれの速さで</div>
+  <div class="controls">
+    <button id="toggle">▶ はじめる</button>
+    <div class="vol"><span>おと</span><input type="range" id="vol" min="0" max="100" value="70" aria-label="音量"></div>
+  </div>
+
+<script>
+(() => {
+  "use strict";
+  const canvas=document.getElementById('c'), ctx=canvas.getContext('2d');
+  const wordEl=document.getElementById('word'), subEl=document.getElementById('subtext');
+  const toggleBtn=document.getElementById('toggle'), volEl=document.getElementById('vol'), hintEl=document.getElementById('hint');
+  const reduceMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const INHALE=5.5, EXHALE=5.5, CYCLE=INHALE+EXHALE;
+  const CYCLE2=11.7;   // 第二の呼吸：少し長い周期 → 約3.1分でズレて、また出会う超スローのフェイジング
+  const CYCLE3=3.7;    // 第三の層：泡の脈。速い時間が、遅い呼吸の中をゆっくり滑っていく
+
+  // ===== 情景（背景）システム：骨格には触れず、まとう空気だけを着替える =====
+  // 実物の質感を狙わず、彩度を抑えた深い色の「気分」を静かな無地グラデーションで置く。
+  // BrPM・呼吸・音・円の動きは全情景で不変。変わるのは背景色と呼吸アクセント色のみ。
+  const SCENES=[
+    { id:'kon',   name:'濃紺', inhale:'127,196,214', exhale:'226,196,150', glow:'190,214,236',
+      swatch:'#16233f', top:'#1b2c4c', mid:'#131f38', bot:'#080d1a' },
+    { id:'sumi',  name:'墨',   inhale:'168,196,204', exhale:'214,196,168', glow:'200,210,214',
+      swatch:'#1a1c1f', top:'#24272b', mid:'#16181b', bot:'#080809' },
+    { id:'tetsu', name:'鉄色', inhale:'150,190,190', exhale:'214,190,150', glow:'196,206,204',
+      swatch:'#20282a', top:'#28322f', mid:'#1a2120', bot:'#0a0f0e' },
+  ];
+  let sceneIdx=0;
+  const bgCanvas=document.createElement('canvas'), bgCtx=bgCanvas.getContext('2d');
+  const scenesEl=document.getElementById('scenes');
+
+  function renderBackground(){
+    if(W<=0||H<=0) return;
+    bgCanvas.width=Math.floor(W*DPR); bgCanvas.height=Math.floor(H*DPR);
+    bgCtx.setTransform(DPR,0,0,DPR,0,0); bgCtx.clearRect(0,0,W,H);
+    const s=SCENES[sceneIdx], g=bgCtx;
+    // 上からうっすら明るく、下へ静かに沈む無地のグラデーション（小細工なし）
+    const rg=g.createRadialGradient(W*0.5,H*0.14,0,W*0.5,H*0.14,Math.hypot(W,H));
+    rg.addColorStop(0,s.top);rg.addColorStop(0.42,s.mid);rg.addColorStop(1,s.bot);
+    g.fillStyle=rg;g.fillRect(0,0,W,H);
+  }
+
+  function updateSwatches(){ [...scenesEl.children].forEach((el,i)=>el.classList.toggle('active',i===sceneIdx)); }
+  function setScene(i){
+    sceneIdx=i; const s=SCENES[i];
+    const root=document.documentElement.style;
+    root.setProperty('--inhale',`rgb(${s.inhale})`); root.setProperty('--exhale',`rgb(${s.exhale})`);
+    document.body.style.background=`linear-gradient(180deg, ${s.top} 0%, ${s.mid} 45%, ${s.bot} 100%)`;
+    renderBackground(); updateSwatches();
+  }
+  const nameEl=null;
+  SCENES.forEach((s,i)=>{
+    const wrap=document.createElement('button'); wrap.className='scene'; wrap.type='button';
+    wrap.setAttribute('aria-label','情景: '+s.name);
+    const sw=document.createElement('span'); sw.className='swatch'; sw.style.background=s.swatch;
+    const lab=document.createElement('span'); lab.className='scene-label'; lab.textContent=s.name;
+    wrap.appendChild(sw); wrap.appendChild(lab);
+    wrap.addEventListener('click',()=>{ setScene(i); showScenes(); });
+    scenesEl.appendChild(wrap);
+  });
+  let scenesHideTimer=null;
+  function showScenes(){ scenesEl.classList.add('show'); clearTimeout(scenesHideTimer); scenesHideTimer=setTimeout(()=>scenesEl.classList.remove('show'),3500); }
+  ['pointermove','pointerdown','touchstart','keydown'].forEach(ev=>window.addEventListener(ev,showScenes,{passive:true}));
+
+  // ============ AUDIO（骨格：全情景で不変）============
+  let audio=null,master=null,reverb=null,reverbGain=null,drone=null,droneGain=null;
+  let playing=false,schedulerId=null,animId=null,startT=0,lastPhase=null,foghornTimer=null;
+  let sched2Id=null, cycle2T=0;   // 第二の呼吸
+  let sched3Id=null, cycle3T=0;   // 第三の層（泡の脈）
+  let hornGlow=0, hornX=0.5;
+
+  const CHORDS=[
+    [146.83,220.00,277.18,329.63,415.30],
+    [164.81,246.94,329.63,415.30,493.88],
+    [130.81,196.00,261.63,329.63,392.00],
+  ];
+  function makeReverb(ac,dur,decay){const len=ac.sampleRate*dur,buf=ac.createBuffer(2,len,ac.sampleRate);for(let ch=0;ch<2;ch++){const d=buf.getChannelData(ch);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay);}const c=ac.createConvolver();c.buffer=buf;return c;}
+  let noiseBuf=null;
+  function getNoise(ac){if(noiseBuf)return noiseBuf;const len=ac.sampleRate*3;noiseBuf=ac.createBuffer(1,len,ac.sampleRate);const d=noiseBuf.getChannelData(0);let last=0;for(let i=0;i<len;i++){const w=Math.random()*2-1;last=(last+0.02*w)/1.02;d[i]=last*3.5;}return noiseBuf;}
+  function breathCurve(steps){const a=new Float32Array(steps);for(let i=0;i<steps;i++){const p=i/(steps-1);const bf=p<0.5?p/0.5:1-(p-0.5)/0.5;a[i]=(1-Math.cos(Math.PI*bf))/2;}return a;}
+  const BREATH_STEPS=64, BREATH_ENV=breathCurve(BREATH_STEPS);
+
+  function initAudio(){
+    audio=new (window.AudioContext||window.webkitAudioContext)();
+    master=audio.createGain(); master.gain.value=volEl.value/100*0.85; master.connect(audio.destination);
+    reverb=makeReverb(audio,3.6,2.1); reverbGain=audio.createGain(); reverbGain.gain.value=0.6; reverb.connect(reverbGain); reverbGain.connect(master);
+    drone=audio.createOscillator(); drone.type='sine'; drone.frequency.value=73.42;
+    droneGain=audio.createGain(); droneGain.gain.value=0.0001;
+    const dl=audio.createBiquadFilter(); dl.type='lowpass'; dl.frequency.value=400;
+    drone.connect(droneGain); droneGain.connect(dl); dl.connect(master); drone.start();
+    const sea=audio.createBufferSource(); sea.buffer=getNoise(audio); sea.loop=true;
+    const seaLP=audio.createBiquadFilter(); seaLP.type='lowpass'; seaLP.frequency.value=440; seaLP.Q.value=0.4;
+    const seaGain=audio.createGain(); seaGain.gain.value=0.018;
+    sea.connect(seaLP); seaLP.connect(seaGain); seaGain.connect(master); seaGain.connect(reverb);
+    const surf=audio.createOscillator(); surf.frequency.value=0.07; const surfG=audio.createGain(); surfG.gain.value=0.012;
+    surf.connect(surfG); surfG.connect(seaGain.gain); surf.start(); sea.start();
+  }
+
+  // ── 汽笛：複数の船（純正倍音で共鳴。曲の調に乗せた完全五度の積み）──
+  const SHIPS=[
+    {f0:73.42,  x:0.18},
+    {f0:110.00, x:0.55},
+    {f0:164.81, x:0.82},
+  ];
+  function foghorn(t){
+    const ship=SHIPS[Math.floor(Math.random()*SHIPS.length)];
+    const dist=Math.pow(Math.random(),0.45); const near=1-dist;
+    hornGlow=0.25+near*0.75; hornX=ship.x+(Math.random()-0.5)*0.06;
+    // 長さ：短く通り過ぎる汽笛から、長く尾を引くものまで（およそ 1/2 〜 2倍の幅）
+    const dur=2.6+Math.random()*7.4; const f0=ship.f0;
+    const bus=audio.createGain(); bus.gain.value=1;
+    const lp=audio.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=520+near*880; lp.Q.value=0.6;
+    // 音量：さらに気配へ。最遠は現在の約1/5、最近でも約1/2
+    const peak=0.0008+near*0.0067;
+    const level=audio.createGain();
+    // 立ち上がり・減衰は長さに比例（短い汽笛でも自然に膨らんで消える）
+    const rise=Math.min(dur*0.38, 1.6+dist*1.4);
+    const fall=Math.min(dur*0.45, 2.6);
+    level.gain.setValueAtTime(0.0001,t);
+    level.gain.exponentialRampToValueAtTime(peak,t+rise);
+    level.gain.setValueAtTime(peak,t+Math.max(rise+0.05,dur-fall));
+    level.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    bus.connect(lp); lp.connect(level); level.connect(master);
+    const rv=audio.createGain(); rv.gain.value=1.1+dist*1.5; lp.connect(rv); rv.connect(reverb);
+    const partials=[[1,1],[2,0.5],[3,0.3],[4,0.18],[5,0.1],[6,0.06]];
+    const voices=[{r:1,a:1},{r:1.5,a:0.18}];
+    voices.forEach(v=>partials.forEach(([mult,amp])=>{
+      const o=audio.createOscillator(); o.type='sine'; o.frequency.value=f0*v.r*mult;
+      const g=audio.createGain(); g.gain.value=amp*v.a*0.5; o.connect(g); g.connect(bus); o.start(t); o.stop(t+dur+0.2);
+    }));
+  }
+  function scheduleFoghorn(){
+    // 船の行き来らしい不規則さ：たまに間を置かず続けて鳴り、たまに長い沈黙が続く
+    const r=Math.random();
+    let wait;
+    if(r<0.18)      wait=6+Math.random()*12;    // 続けざま（同じ船の二声 / すれ違い）
+    else if(r<0.62) wait=25+Math.random()*45;   // ふつうの間
+    else if(r<0.90) wait=75+Math.random()*70;   // 遠のく
+    else            wait=150+Math.random()*120; // 長い沈黙
+    foghornTimer=setTimeout(()=>{ if(playing){ foghorn(audio.currentTime+0.1); scheduleFoghorn(); } }, wait*1000);
+  }
+
+  function scheduleCycle(t,idx){
+    const chord=CHORDS[idx%CHORDS.length];
+    const pg=audio.createGain(); pg.gain.value=0.0001;
+    const env=new Float32Array(BREATH_STEPS); for(let i=0;i<BREATH_STEPS;i++) env[i]=0.0001+BREATH_ENV[i]*0.13;
+    pg.gain.setValueCurveAtTime(env,t,CYCLE);
+    const lp=audio.createBiquadFilter(); lp.type='lowpass';
+    const fenv=new Float32Array(BREATH_STEPS); for(let i=0;i<BREATH_STEPS;i++) fenv[i]=500+BREATH_ENV[i]*1700;
+    lp.frequency.setValueCurveAtTime(fenv,t,CYCLE);
+    pg.connect(lp); lp.connect(master); lp.connect(reverb);
+    chord.forEach((f,i)=>{const o=audio.createOscillator();o.type=i%2?'triangle':'sine';o.frequency.value=f;o.detune.value=(i-2)*3;const og=audio.createGain();og.gain.value=1/chord.length;o.connect(og);og.connect(pg);o.start(t);o.stop(t+CYCLE+0.4);});
+    const denv=new Float32Array(BREATH_STEPS); for(let i=0;i<BREATH_STEPS;i++) denv[i]=0.02+BREATH_ENV[i]*0.05;
+    droneGain.gain.setValueCurveAtTime(denv,t,CYCLE);
+    bell(t+INHALE*0.96, chord[3]*2);
+  }
+  function bell(t,f){const o=audio.createOscillator();o.type='sine';o.frequency.value=f;const g=audio.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.05,t+0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+3.2);o.connect(g);g.connect(reverb);g.connect(master);o.start(t);o.stop(t+3.3);}
+  function bubble(t,amp){const k=amp===undefined?1:amp;const o=audio.createOscillator();o.type='sine';const f=(480+Math.random()*700)*(0.85+k*0.2);o.frequency.setValueAtTime(f*0.6,t);o.frequency.exponentialRampToValueAtTime(f,t+0.08);const g=audio.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.018+0.03*k,t+0.02);g.gain.exponentialRampToValueAtTime(0.0001,t+0.18);o.connect(g);g.connect(reverb);g.connect(master);o.start(t);o.stop(t+0.2);registerBubbleVisual(t,k);}
+
+  let cycleIdx=0,nextCycleT=0;
+  function scheduler(){while(nextCycleT<audio.currentTime+1.2){scheduleCycle(nextCycleT,cycleIdx);nextCycleT+=CYCLE;cycleIdx++;}schedulerId=setTimeout(scheduler,250);}
+
+  // ── 第二の呼吸：01と同じパッド音色。和声は主呼吸に合わせ、位相（膨らむ間）だけがゆっくりズレる ──
+  function scheduleCycle2(t){
+    const mainIdx=Math.floor((t-startT)/CYCLE);
+    const chord=CHORDS[((mainIdx%CHORDS.length)+CHORDS.length)%CHORDS.length];
+    const pg=audio.createGain(); pg.gain.value=0.0001;
+    const env=new Float32Array(BREATH_STEPS); for(let i=0;i<BREATH_STEPS;i++) env[i]=0.0001+BREATH_ENV[i]*0.08; // 主呼吸より控えめ
+    pg.gain.setValueCurveAtTime(env,t,CYCLE2);
+    const lp=audio.createBiquadFilter(); lp.type='lowpass';
+    const fenv=new Float32Array(BREATH_STEPS); for(let i=0;i<BREATH_STEPS;i++) fenv[i]=480+BREATH_ENV[i]*1500;
+    lp.frequency.setValueCurveAtTime(fenv,t,CYCLE2);
+    pg.connect(lp); lp.connect(master); lp.connect(reverb);
+    chord.forEach((f,i)=>{const o=audio.createOscillator();o.type=i%2?'triangle':'sine';o.frequency.value=f;o.detune.value=(i-2)*3+6;const og=audio.createGain();og.gain.value=1/chord.length;o.connect(og);og.connect(pg);o.start(t);o.stop(t+CYCLE2+0.4);});
+  }
+  function scheduler2(){while(cycle2T<audio.currentTime+1.2){scheduleCycle2(cycle2T);cycle2T+=CYCLE2;}sched2Id=setTimeout(scheduler2,250);}
+
+  // ── 第三の層：泡の脈。3.7秒ごとにゆるく満ちて引く。速い時間が遅い呼吸の中を滑る ──
+  function scheduleCycle3(t){
+    // ひと脈のなかで泡が寄せては返す（山で密に、谷でまばらに）
+    const n=3+Math.floor(Math.random()*3);
+    for(let i=0;i<n;i++){
+      const u=i/n;                                  // 0..1 脈のなかの位置
+      const dens=(1-Math.cos(Math.PI*2*u))/2;       // 山＝密
+      if(Math.random()<0.35+dens*0.6){
+        const jitter=(Math.random()-0.5)*0.35;
+        bubble(t+u*CYCLE3+jitter, 0.55+dens*0.75);  // 山ほど大きめの泡
+      }
+    }
+  }
+  function scheduler3(){while(cycle3T<audio.currentTime+1.2){scheduleCycle3(cycle3T);cycle3T+=CYCLE3;}sched3Id=setTimeout(scheduler3,250);}
+
+  function setWord(chars,cls){wordEl.className='word '+cls;wordEl.innerHTML='';const spans=chars.split('').map(c=>{const s=document.createElement('span');s.textContent=c;wordEl.appendChild(s);return s;});spans.forEach((s,i)=>setTimeout(()=>s.classList.add('on'),120+i*520));}
+
+  let W=0,H=0,DPR=1;
+  function resize(){DPR=Math.min(window.devicePixelRatio||1,2);const r=canvas.getBoundingClientRect();W=r.width;H=r.height;canvas.width=W*DPR;canvas.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);renderBackground();}
+  window.addEventListener('resize',resize);
+
+  const bubbleVis=[]; let pendingBubbles=[];
+  function registerBubbleVisual(t,k){pendingBubbles.push({t,k:k===undefined?1:k});}
+  function spawnBubble(k){bubbleVis.push({x:Math.random()*W,y:H+10,r:(1.6+Math.random()*4)*(0.7+k*0.5),v:(12+Math.random()*22)*(0.8+k*0.35),wob:Math.random()*Math.PI*2});}
+
+  function currentBreath(now){const base=playing?now-startT:now;const p=(base%CYCLE+CYCLE)%CYCLE/CYCLE;const bf=p<0.5?p/0.5:1-(p-0.5)/0.5;return {b:(1-Math.cos(Math.PI*bf))/2,p,inhale:p<0.5};}
+
+  function draw(){
+    const now=audio?audio.currentTime:performance.now()/1000;
+    const {b,inhale}=currentBreath(now);
+    const base2=(playing?now-startT:now); const p2=((base2%CYCLE2)+CYCLE2)%CYCLE2/CYCLE2;
+    const bf2=p2<0.5?p2/0.5:1-(p2-0.5)/0.5; const b2=(1-Math.cos(Math.PI*bf2))/2; const inhale2=p2<0.5;
+    const S=SCENES[sceneIdx];
+    const phase=inhale?'in':'out';
+    if(phase!==lastPhase){lastPhase=phase;if(inhale){setWord('すう','inhale');subEl.textContent='鼻から、ゆっくり';}else{setWord('はく','exhale');subEl.textContent='口から、細く長く';}}
+
+    while(pendingBubbles.length && now>=pendingBubbles[0].t){const pb=pendingBubbles.shift();spawnBubble(pb.k);}
+    // 待機中も泡の脈だけは静かに続く
+    if(!playing && !reduceMotion){
+      const u=((now%CYCLE3)+CYCLE3)%CYCLE3/CYCLE3;
+      const dens=(1-Math.cos(Math.PI*2*u))/2;
+      if(Math.random()<0.012+dens*0.03) spawnBubble(0.5+dens*0.6);
+    }
+    hornGlow*=0.986;
+
+    ctx.clearRect(0,0,W,H);
+    const cx=W/2, cy=H/2, unit=Math.min(W,H);
+    if(bgCanvas.width) ctx.drawImage(bgCanvas,0,0,W,H);
+
+    if(hornGlow>0.008){
+      const lx=W*hornX, ly=H*0.86;
+      const gp=ctx.createRadialGradient(lx,ly,0,lx,ly,unit*0.13);
+      gp.addColorStop(0,`rgba(${S.glow},${0.11*hornGlow})`);gp.addColorStop(1,`rgba(${S.glow},0)`);
+      ctx.fillStyle=gp; ctx.beginPath(); ctx.arc(lx,ly,unit*0.13,0,Math.PI*2); ctx.fill();
+    }
+
+    for(let i=bubbleVis.length-1;i>=0;i--){const bb=bubbleVis[i];bb.y-=bb.v*0.016;bb.x+=Math.sin(bb.y*0.02+bb.wob)*0.4;if(bb.y<-12){bubbleVis.splice(i,1);continue;}ctx.strokeStyle='rgba(180,225,235,0.22)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(bb.x,bb.y,bb.r,0,Math.PI*2);ctx.stroke();ctx.fillStyle='rgba(210,240,248,0.06)';ctx.beginPath();ctx.arc(bb.x-bb.r*0.3,bb.y-bb.r*0.3,bb.r*0.4,0,Math.PI*2);ctx.fill();}
+
+    const accent=inhale?S.inhale:S.exhale;
+    const baseR=unit*0.16, R=baseR*(0.62+0.42*b);
+    const guideR=unit*0.30;
+    ctx.strokeStyle='rgba(159,178,189,0.14)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx,cy,guideR,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle=`rgba(${accent},0.85)`;ctx.lineWidth=2.5;ctx.lineCap='round';ctx.beginPath();ctx.arc(cx,cy,guideR,-Math.PI/2,-Math.PI/2+b*Math.PI*2);ctx.stroke();
+    const ang=-Math.PI/2+b*Math.PI*2;ctx.fillStyle=`rgba(${accent},0.95)`;ctx.beginPath();ctx.arc(cx+Math.cos(ang)*guideR,cy+Math.sin(ang)*guideR,4.5,0,Math.PI*2);ctx.fill();
+
+    // 第二の呼吸：もうひとつの円。主呼吸とズレて、二重の波紋のように広がっては戻る
+    const accent2=inhale2?S.inhale:S.exhale;
+    const R2=baseR*(0.62+0.42*b2);
+    const g2=ctx.createRadialGradient(cx,cy,0,cx,cy,R2*1.7);
+    g2.addColorStop(0,`rgba(${accent2},0.10)`);g2.addColorStop(0.6,`rgba(${accent2},0.04)`);g2.addColorStop(1,`rgba(${accent2},0)`);
+    ctx.fillStyle=g2;ctx.beginPath();ctx.arc(cx,cy,R2*1.7,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle=`rgba(${accent2},0.38)`;ctx.lineWidth=1.1;ctx.beginPath();
+    const seg2=72;
+    for(let i=0;i<=seg2;i++){const a=i/seg2*Math.PI*2;const w=reduceMotion?0:Math.sin(a*3-now*1.0)*R2*0.012+Math.sin(a*4+now*0.7)*R2*0.008;const rr=R2+w;const x=cx+Math.cos(a)*rr,y=cy+Math.sin(a)*rr;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+    ctx.closePath();ctx.stroke();
+
+    const grd=ctx.createRadialGradient(cx,cy,0,cx,cy,R*1.7);
+    grd.addColorStop(0,`rgba(${accent},0.28)`);grd.addColorStop(0.55,`rgba(${accent},0.10)`);grd.addColorStop(1,`rgba(${accent},0)`);
+    ctx.fillStyle=grd;ctx.beginPath();ctx.arc(cx,cy,R*1.7,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle=`rgba(${accent},0.55)`;ctx.lineWidth=1.4;ctx.beginPath();
+    const seg=72;for(let i=0;i<=seg;i++){const a=i/seg*Math.PI*2;const w=reduceMotion?0:Math.sin(a*3+now*1.2)*R*0.012+Math.sin(a*5-now*0.8)*R*0.008;const rr=R+w;const x=cx+Math.cos(a)*rr,y=cy+Math.sin(a)*rr;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+    ctx.closePath();ctx.stroke();
+
+    animId=requestAnimationFrame(draw);
+  }
+
+  function start(){
+    if(!audio) initAudio();
+    if(audio.state==='suspended') audio.resume();
+    playing=true; toggleBtn.textContent='❚❚ とめる'; hintEl.style.opacity='0';
+    startT=audio.currentTime+0.05; cycleIdx=0; nextCycleT=audio.currentTime+0.05; cycle2T=audio.currentTime+0.05; cycle3T=audio.currentTime+0.05; lastPhase=null;
+    setWord('すう','inhale'); subEl.textContent='鼻から、ゆっくり';
+    scheduler(); scheduler2(); scheduler3(); scheduleFoghorn(); if(!animId) draw();
+  }
+  function stop(){
+    playing=false; toggleBtn.textContent='▶ はじめる'; clearTimeout(schedulerId); clearTimeout(sched2Id); clearTimeout(sched3Id); clearTimeout(foghornTimer);
+    if(master){master.gain.linearRampToValueAtTime(0.0001,audio.currentTime+0.6);setTimeout(()=>{if(audio)audio.suspend();},700);}
+  }
+  toggleBtn.addEventListener('click',()=>{if(playing)stop();else{if(master)master.gain.value=volEl.value/100*0.85;start();}});
+  volEl.addEventListener('input',()=>{if(master)master.gain.value=volEl.value/100*0.85;});
+
+  resize(); setScene(0); draw();
+})();
+</script>
+</body>
+</html>
